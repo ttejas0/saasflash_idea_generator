@@ -53,16 +53,16 @@ ${prefs.recentRejectedExamples.length > 0 ? prefs.recentRejectedExamples.map((e)
 
   return `You are an expert idea generator for a daily briefing tool targeting founders, operators, and builders.
 
-Your job is to analyze recent tech and business signals, then generate ${count} distinct, actionable idea cards.
+Your job is to analyze recent tech and business news, then generate ${count} distinct, actionable idea cards.
 
-## Source Signals (recent articles/posts):
+## Source News (recent articles/posts):
 ${sourceSummaries}
 
 ## User Preferences:
 ${prefSection}
 
 ## Rules:
-- Each idea MUST be grounded in at least one source signal above. Reference its number in source_item_ids.
+- Each idea MUST be grounded in at least one source news item above. Reference its number in source_item_ids.
 - NEVER write tutorials, how-to guides, or step-by-step instructions.
 - Frame each idea as an opportunity, gap, angle, or shift — not a prescription.
 - Target audience must be one or more of: founders, operators, builders.
@@ -80,7 +80,7 @@ Return ONLY valid JSON matching this exact structure:
     {
       "title": "concise punchy title",
       "idea_type": "product|content|operations",
-      "news": "the recent news or signal (2-3 sentences)",
+      "news": "the recent news (2-3 sentences)",
       "attention_point": "what's important to pay attention to here (2-3 sentences)",
       "angle_1": "first angle suggestion (actionable opportunity)",
       "angle_2": "second angle suggestion (alternative or complementary approach)",
@@ -103,8 +103,11 @@ export async function generateIdeasFromLLM(
   count = 10
 ): Promise<GeneratedIdea[]> {
   const prefs = getPreferenceSummary();
+  console.log(`[openrouter] Building prompt with ${sourceItems.length} source items, requesting ${count} ideas`);
+  console.log(`[openrouter] Preferences: preferredTags=[${prefs.preferredTags.join(', ')}] rejectedTags=[${prefs.rejectedTags.join(', ')}]`);
   const prompt = buildPrompt(sourceItems, prefs, count);
 
+  console.log(`[openrouter] Sending request to LLM...`);
   const response = await chatCompletion({
     messages: [
       {
@@ -118,23 +121,48 @@ export async function generateIdeasFromLLM(
     max_tokens: 4000,
   });
 
-  console.log("Raw LLM response object:", JSON.stringify(response, null, 2));
+  // Log response metadata (model used, tokens, etc.) but not the full content
+  console.log(`[openrouter] Response received. Model: ${response.model || 'unknown'}, Usage: ${JSON.stringify(response.usage || {})}`);
+
   const raw = response.choices?.[0]?.message?.content || "";
+  console.log(`[openrouter] Raw content length: ${raw.length} chars`);
+
+  if (!raw || raw.length === 0) {
+    // Some models put the content in reasoning instead of content
+    const reasoning = response.choices?.[0]?.message?.reasoning;
+    console.error(`[openrouter] ❌ Empty content field in LLM response!`);
+    console.error(`[openrouter]   Has reasoning field: ${!!reasoning}`);
+    console.error(`[openrouter]   Full response keys: ${JSON.stringify(Object.keys(response.choices?.[0]?.message || {}))}`);
+    if (process.env.DEBUG_LLM) {
+      console.error(`[openrouter]   Full response:`, JSON.stringify(response, null, 2));
+    }
+    throw new Error(`LLM returned empty content. The model may not support structured output. Check the model configuration.`);
+  }
 
   // Strip markdown code fences, then extract JSON
   const stripped = raw.replace(/```(?:json)?\s*/g, "").replace(/```\s*/g, "");
   const jsonMatch = stripped.match(/\{[\s\S]*\}/);
   if (!jsonMatch) {
+    console.error(`[openrouter] ❌ Could not extract JSON from LLM response`);
+    console.error(`[openrouter]   Raw content (first 500 chars): ${raw.slice(0, 500)}`);
     throw new Error(`LLM returned non-JSON response: ${raw.slice(0, 200)}`);
   }
 
+  console.log(`[openrouter] Extracted JSON (${jsonMatch[0].length} chars), parsing...`);
   const parsed = JSON.parse(jsonMatch[0]);
+  console.log(`[openrouter] Parsed JSON has ${parsed.ideas?.length ?? 0} ideas`);
+
   const validated = IdeasResponseSchema.safeParse(parsed);
 
   if (!validated.success) {
-    console.error("[openrouter] Validation errors:", validated.error.issues);
+    console.error("[openrouter] ❌ Validation errors:", JSON.stringify(validated.error.issues, null, 2));
+    // Log which ideas failed and why
+    for (const issue of validated.error.issues) {
+      console.error(`[openrouter]   Path: ${issue.path.join('.')}, Code: ${issue.code}, Message: ${issue.message}`);
+    }
     throw new Error(`LLM response failed validation: ${validated.error.message}`);
   }
 
+  console.log(`[openrouter] ✅ All ${validated.data.ideas.length} ideas passed validation`);
   return validated.data.ideas;
 }

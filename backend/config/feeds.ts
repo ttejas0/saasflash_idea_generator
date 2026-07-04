@@ -21,7 +21,7 @@ export const DEFAULT_SOURCES = [
   {
     name: "The Verge - Tech",
     type: "rss",
-    url: "https://www.theverge.com/tech/rss/index.xml",
+    url: "https://www.theverge.com/rss/index.xml",
     category: "tech_news",
   },
   {

@@ -33,11 +33,34 @@ function App() {
     setLoading(true);
     try {
       const endpoint = activeTab === 'today' ? '/api/ideas/today' : `/api/ideas/${activeTab}`;
+      console.log(`[frontend] Fetching ideas from: ${endpoint}`);
       const res = await fetch(endpoint);
       const data = await res.json();
+      console.log(`[frontend] Response status: ${res.status}, ideas count: ${data.ideas?.length ?? 0}`);
+
+      // Validate data shape
+      if (data.ideas?.length > 0) {
+        const sample = data.ideas[0];
+        console.log('[frontend] Sample idea:', {
+          id: sample.id,
+          title: sample.title?.slice(0, 50),
+          idea_type: sample.idea_type,
+          audience_type: typeof sample.audience,
+          audience_isArray: Array.isArray(sample.audience),
+          audience: sample.audience,
+          tags_type: typeof sample.tags,
+          tags_isArray: Array.isArray(sample.tags),
+          tags: sample.tags,
+          news_length: sample.news?.length,
+          attention_point_length: sample.attention_point?.length,
+          angle_1_length: sample.angle_1?.length,
+          angle_2_length: sample.angle_2?.length,
+        });
+      }
+
       setIdeas(data.ideas || []);
     } catch (err) {
-      console.error('Failed to fetch ideas', err);
+      console.error('[frontend] Failed to fetch ideas:', err);
     } finally {
       setLoading(false);
     }
@@ -63,21 +86,28 @@ function App() {
     setGenerating(true);
     try {
       setGenerateStatus('Fetching latest sources...');
-      await fetch('/api/admin/fetch-sources', {
+      console.log('[frontend] Starting source fetch...');
+      const fetchRes = await fetch('/api/admin/fetch-sources', {
         method: 'POST',
       });
+      const fetchData = await fetchRes.json();
+      console.log('[frontend] Source fetch result:', fetchData);
 
       setGenerateStatus('Synthesizing ideas...');
-      await fetch('/api/admin/generate', {
+      console.log('[frontend] Starting idea generation...');
+      const genRes = await fetch('/api/admin/generate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ count: 5, runType: 'manual' })
       });
+      const genData = await genRes.json();
+      console.log('[frontend] Generation result:', genData);
+
       if (activeTab === 'today') {
         fetchIdeas();
       }
     } catch (err) {
-      console.error('Failed to generate', err);
+      console.error('[frontend] Failed to generate:', err);
     } finally {
       setGenerating(false);
       setGenerateStatus(null);

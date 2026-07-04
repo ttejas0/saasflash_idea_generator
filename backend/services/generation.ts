@@ -62,21 +62,37 @@ export async function runGenerationPipeline(options?: {
     }
     console.log(`[generation] Using ${sourceItems.length} source items for batch ${batchId}`);
 
+    // Log quality summary of source items
+    const withSummary = sourceItems.filter(si => si.summary && si.summary.length > 10);
+    const withoutSummary = sourceItems.length - withSummary.length;
+    console.log(`[generation]   Source item quality: ${withSummary.length} with summaries, ${withoutSummary} without`);
+
     // 3. Call LLM
+    console.log(`[generation] Calling LLM for ${count} ideas...`);
     const ideas = await generateIdeasFromLLM(sourceItems, count);
     console.log(`[generation] LLM returned ${ideas.length} ideas`);
+
+    // Log each idea from LLM for debugging
+    for (const idea of ideas) {
+      console.log(`[generation]   → "${idea.title}" [${idea.idea_type}] audience=${JSON.stringify(idea.audience)} tags=${JSON.stringify(idea.tags)} source_refs=${JSON.stringify(idea.source_item_ids)}`);
+    }
 
     // 4. Deduplicate (outside transaction so intra-batch dupes are caught)
     const deduped = ideas.filter((idea) => {
       if (isDuplicate(idea)) {
         rejected++;
-        console.log(`[generation] Rejected duplicate: "${idea.title}"`);
+        console.log(`[generation]   ❌ Rejected duplicate: "${idea.title}"`);
         return false;
       }
       return true;
     });
+    console.log(`[generation] After dedup: ${deduped.length} accepted, ${rejected} rejected`);
 
-    // 5. Save accepted ideas
+    // 5. Build source_item_ids mapping (LLM returns 1-indexed prompt positions, map to real DB IDs)
+    // The prompt slices sourceItems to the first 30, so indices are 1-based into that slice
+    const promptSourceItems = sourceItems.slice(0, 30);
+
+    // 6. Save accepted ideas
     const insert = db.prepare(`
       INSERT OR IGNORE INTO ideas
         (batch_id, title, idea_type, news, attention_point, angle_1, angle_2, audience, tags,
@@ -91,6 +107,20 @@ export async function runGenerationPipeline(options?: {
         const dupScore = computeDuplicateScore(idea);
         const contentHash = hashContent(`${idea.title} ${idea.news}`);
 
+        // Map LLM's 1-indexed prompt positions to actual source_item DB IDs
+        const mappedSourceIds = idea.source_item_ids
+          .map(ref => {
+            const idx = parseInt(ref, 10) - 1; // LLM uses 1-based indexing
+            if (idx >= 0 && idx < promptSourceItems.length) {
+              return promptSourceItems[idx].id;
+            }
+            console.warn(`[generation]   ⚠️ Invalid source ref "${ref}" in idea "${idea.title}" — out of range`);
+            return null;
+          })
+          .filter((id): id is number => id !== null);
+
+        console.log(`[generation]   Saving "${idea.title}": dupScore=${dupScore.toFixed(3)}, sourceIds=${JSON.stringify(mappedSourceIds)}`);
+
         const res = insert.run({
           batch_id: batchId,
           title: idea.title,
@@ -101,33 +131,38 @@ export async function runGenerationPipeline(options?: {
           angle_2: idea.angle_2,
           audience: JSON.stringify(idea.audience),
           tags: JSON.stringify(idea.tags),
-          source_item_ids: JSON.stringify(idea.source_item_ids),
+          source_item_ids: JSON.stringify(mappedSourceIds),
           novelty_score: idea.novelty_score,
           relevance_score: idea.relevance_score,
           duplicate_score: dupScore,
           content_hash: contentHash,
         });
 
-        if (res.changes > 0) saved++;
+        if (res.changes > 0) {
+          saved++;
+        } else {
+          console.log(`[generation]   ⚠️ Skipped (content hash collision): "${idea.title}"`);
+        }
       }
     });
 
     saveAll();
 
-    // 5. Mark batch completed
+    // 7. Mark batch completed
     db.prepare(
       `UPDATE idea_batches SET status = 'completed', completed_at = datetime('now') WHERE id = ?`
     ).run(batchId);
 
     console.log(
-      `[generation] Batch ${batchId} complete: ${saved} saved, ${rejected} rejected as duplicates`
+      `[generation] ✅ Batch ${batchId} complete: ${saved} saved, ${rejected} rejected as duplicates`
     );
   } catch (err) {
     const message = (err as Error).message;
     db.prepare(
       `UPDATE idea_batches SET status = 'failed', completed_at = datetime('now'), error_message = ? WHERE id = ?`
     ).run(message, batchId);
-    console.error(`[generation] Batch ${batchId} failed:`, message);
+    console.error(`[generation] ❌ Batch ${batchId} failed:`, message);
+    console.error(`[generation] Stack:`, (err as Error).stack);
     throw err;
   }
 

@@ -8,10 +8,13 @@ const router = Router();
 
 // POST /api/admin/fetch-sources
 router.post("/fetch-sources", async (_req, res) => {
+  console.log(`[api/admin] POST /fetch-sources — starting feed fetch...`);
   try {
     const count = await fetchAllSources();
+    console.log(`[api/admin]   Feed fetch complete: ${count} new items`);
     res.json({ success: true, newItems: count });
   } catch (err) {
+    console.error(`[api/admin]   ❌ Feed fetch failed:`, (err as Error).message);
     res.status(500).json({ error: (err as Error).message });
   }
 });
@@ -25,13 +28,17 @@ const generateSchema = z.object({
 router.post("/generate", async (req, res) => {
   const parsed = generateSchema.safeParse(req.body);
   if (!parsed.success) {
+    console.error(`[api/admin] POST /generate — invalid body:`, parsed.error.issues);
     return res.status(400).json({ error: "Invalid body", details: parsed.error.issues });
   }
 
+  console.log(`[api/admin] POST /generate — count=${parsed.data.count}, runType=${parsed.data.runType}`);
   try {
     const result = await runGenerationPipeline(parsed.data);
+    console.log(`[api/admin]   Generation complete:`, result);
     res.json({ success: true, ...result });
   } catch (err) {
+    console.error(`[api/admin]   ❌ Generation failed:`, (err as Error).message);
     res.status(500).json({ error: (err as Error).message });
   }
 });

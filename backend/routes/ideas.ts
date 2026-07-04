@@ -18,6 +18,7 @@ function safeParseJson<T>(val: string | null | undefined, fallback: T): T {
 router.get("/today", (req, res) => {
   const db = getDb();
   const { status, tag, idea_type, audience, limit = "30" } = req.query as Record<string, string>;
+  console.log(`[api/ideas] GET /today — filters: status=${status}, tag=${tag}, idea_type=${idea_type}, audience=${audience}, limit=${limit}`);
 
   let sql = `
     SELECT * FROM ideas
@@ -48,6 +49,7 @@ router.get("/today", (req, res) => {
   params.push(safeLimit);
 
   const ideas = db.prepare(sql).all(...params);
+  console.log(`[api/ideas]   Raw DB results: ${(ideas as any[]).length} ideas`);
 
   // Mark as shown
   const ids = (ideas as any[]).map((i: any) => i.id);
@@ -66,6 +68,13 @@ router.get("/today", (req, res) => {
     source_item_ids: safeParseJson(idea.source_item_ids, []),
   }));
 
+  // Log a sample to verify data shape
+  if (parsed.length > 0) {
+    const sample = parsed[0];
+    console.log(`[api/ideas]   Sample idea shape: title="${sample.title?.slice(0, 50)}...", audience=${JSON.stringify(sample.audience)}, tags=${JSON.stringify(sample.tags)}, audience_isArray=${Array.isArray(sample.audience)}, tags_isArray=${Array.isArray(sample.tags)}`);
+  }
+
+  console.log(`[api/ideas]   Returning ${parsed.length} parsed ideas`);
   res.json({ ideas: parsed, count: parsed.length });
 });
 
@@ -75,6 +84,7 @@ router.get("/approved", (req, res) => {
   const { limit = "50" } = req.query as Record<string, string>;
   const rawLimit = parseInt(limit, 10);
   const safeLimit = isNaN(rawLimit) || rawLimit < 1 ? 50 : Math.min(rawLimit, 100);
+  console.log(`[api/ideas] GET /approved — limit=${safeLimit}`);
 
   const ideas = db
     .prepare(
@@ -90,12 +100,14 @@ router.get("/approved", (req, res) => {
     source_item_ids: safeParseJson(idea.source_item_ids, []),
   }));
 
+  console.log(`[api/ideas]   Returning ${parsed.length} approved ideas`);
   res.json({ ideas: parsed });
 });
 
 // GET /api/ideas/rejected
 router.get("/rejected", (req, res) => {
   const db = getDb();
+  console.log(`[api/ideas] GET /rejected`);
   const ideas = db
     .prepare(
       `SELECT * FROM ideas WHERE status = 'rejected'
@@ -110,6 +122,7 @@ router.get("/rejected", (req, res) => {
     source_item_ids: safeParseJson(idea.source_item_ids, []),
   }));
 
+  console.log(`[api/ideas]   Returning ${parsed.length} rejected ideas`);
   res.json({ ideas: parsed });
 });
 
