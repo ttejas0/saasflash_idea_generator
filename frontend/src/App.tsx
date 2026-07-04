@@ -19,6 +19,7 @@ function App() {
   const [ideas, setIdeas] = useState<Idea[]>([]);
   const [loading, setLoading] = useState(false);
   const [generating, setGenerating] = useState(false);
+  const [generateStatus, setGenerateStatus] = useState<string | null>(null);
   
   // Filter states
   const [typeFilter, setTypeFilter] = useState<string | null>(null);
@@ -60,6 +61,12 @@ function App() {
   const handleGenerate = async () => {
     setGenerating(true);
     try {
+      setGenerateStatus('Fetching latest sources...');
+      await fetch('/api/admin/fetch-sources', {
+        method: 'POST',
+      });
+
+      setGenerateStatus('Synthesizing ideas...');
       await fetch('/api/admin/generate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -72,6 +79,7 @@ function App() {
       console.error('Failed to generate', err);
     } finally {
       setGenerating(false);
+      setGenerateStatus(null);
     }
   };
 
@@ -121,7 +129,7 @@ function App() {
           disabled={generating}
         >
           {generating ? <RefreshCw className="animate-spin" size={18} /> : <Zap size={18} />}
-          {generating ? 'Generating...' : 'Generate More'}
+          {generating ? (generateStatus || 'Generating...') : 'Generate More'}
         </button>
       </header>
       
