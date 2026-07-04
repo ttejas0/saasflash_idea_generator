@@ -96,7 +96,7 @@ export function getPreferenceSummary(): PreferenceSummary {
 
   const recentApproved = db
     .prepare(
-      `SELECT title || ': ' || opportunity as text
+      `SELECT title || ': ' || news as text
        FROM ideas WHERE status = 'approved'
        ORDER BY decided_at DESC LIMIT 5`
     )
@@ -104,7 +104,7 @@ export function getPreferenceSummary(): PreferenceSummary {
 
   const recentRejected = db
     .prepare(
-      `SELECT title || ': ' || opportunity as text
+      `SELECT title || ': ' || news as text
        FROM ideas WHERE status = 'rejected'
        ORDER BY decided_at DESC LIMIT 5`
     )

@@ -79,25 +79,26 @@ export async function runGenerationPipeline(options?: {
     // 5. Save accepted ideas
     const insert = db.prepare(`
       INSERT OR IGNORE INTO ideas
-        (batch_id, title, idea_type, context, opportunity, why_now, audience, tags,
+        (batch_id, title, idea_type, news, attention_point, angle_1, angle_2, audience, tags,
          source_item_ids, novelty_score, relevance_score, duplicate_score, content_hash, status)
       VALUES
-        (@batch_id, @title, @idea_type, @context, @opportunity, @why_now, @audience, @tags,
+        (@batch_id, @title, @idea_type, @news, @attention_point, @angle_1, @angle_2, @audience, @tags,
          @source_item_ids, @novelty_score, @relevance_score, @duplicate_score, @content_hash, 'new')
     `);
 
     const saveAll = db.transaction(() => {
       for (const idea of deduped) {
         const dupScore = computeDuplicateScore(idea);
-        const contentHash = hashContent(`${idea.title} ${idea.opportunity}`);
+        const contentHash = hashContent(`${idea.title} ${idea.news}`);
 
         const res = insert.run({
           batch_id: batchId,
           title: idea.title,
           idea_type: idea.idea_type,
-          context: idea.context,
-          opportunity: idea.opportunity,
-          why_now: idea.why_now || "",
+          news: idea.news,
+          attention_point: idea.attention_point,
+          angle_1: idea.angle_1,
+          angle_2: idea.angle_2,
           audience: JSON.stringify(idea.audience),
           tags: JSON.stringify(idea.tags),
           source_item_ids: JSON.stringify(idea.source_item_ids),

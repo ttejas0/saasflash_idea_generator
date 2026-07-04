@@ -5,7 +5,7 @@ const SIMILARITY_THRESHOLD = 0.45;
 
 interface IdeaCandidate {
   title: string;
-  opportunity: string;
+  news: string;
 }
 
 /**
@@ -15,7 +15,7 @@ function getRecentIdeaTexts(limit = 200): string[] {
   const db = getDb();
   const rows = db
     .prepare(
-      `SELECT title || ' ' || opportunity as text
+      `SELECT title || ' ' || news as text
        FROM ideas
        WHERE status NOT IN ('archived')
        ORDER BY created_at DESC
@@ -31,7 +31,7 @@ function getRecentIdeaTexts(limit = 200): string[] {
  */
 export function computeDuplicateScore(candidate: IdeaCandidate): number {
   const existing = getRecentIdeaTexts();
-  const candidateText = `${candidate.title} ${candidate.opportunity}`;
+  const candidateText = `${candidate.title} ${candidate.news}`;
   let maxSim = 0;
   for (const text of existing) {
     const sim = jaccardSimilarity(candidateText, text);

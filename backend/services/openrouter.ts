@@ -6,9 +6,10 @@ import { z } from "zod";
 const IdeaSchema = z.object({
   title: z.string().min(5),
   idea_type: z.enum(["product", "content", "operations"]),
-  context: z.string().min(20),
-  opportunity: z.string().min(20),
-  why_now: z.string().optional().default(""),
+  news: z.string().min(10),
+  attention_point: z.string().min(10),
+  angle_1: z.string().min(10),
+  angle_2: z.string().min(10),
   audience: z.array(z.enum(["founders", "operators", "builders"])).min(1),
   tags: z.array(z.string()).min(1),
   source_item_ids: z.array(z.string()).default([]),
@@ -79,9 +80,10 @@ Return ONLY valid JSON matching this exact structure:
     {
       "title": "concise punchy title",
       "idea_type": "product|content|operations",
-      "context": "what recent signal triggered this (2-3 sentences)",
-      "opportunity": "the gap or angle worth exploring (2-3 sentences)",
-      "why_now": "why this moment makes it timely (1-2 sentences)",
+      "news": "the recent news or signal (2-3 sentences)",
+      "attention_point": "what's important to pay attention to here (2-3 sentences)",
+      "angle_1": "first angle suggestion (actionable opportunity)",
+      "angle_2": "second angle suggestion (alternative or complementary approach)",
       "audience": ["founders"|"operators"|"builders"],
       "tags": ["tag1", "tag2"],
       "source_item_ids": ["1", "3"],
@@ -116,6 +118,7 @@ export async function generateIdeasFromLLM(
     max_tokens: 4000,
   });
 
+  console.log("Raw LLM response object:", JSON.stringify(response, null, 2));
   const raw = response.choices?.[0]?.message?.content || "";
 
   // Strip markdown code fences, then extract JSON

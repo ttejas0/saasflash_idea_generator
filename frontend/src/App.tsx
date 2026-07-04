@@ -6,9 +6,10 @@ interface Idea {
   title: string;
   idea_type: 'product' | 'content' | 'operations';
   audience: string[];
-  context: string;
-  opportunity: string;
-  why_now: string;
+  news: string;
+  attention_point: string;
+  angle_1: string;
+  angle_2: string;
   tags: string[];
   status: string;
   source_item_ids: string[];
@@ -190,21 +191,24 @@ function App() {
               </div>
               
               <div className="card-section">
-                <span className="section-label">Context</span>
-                <p className="section-content">{idea.context}</p>
+                <span className="section-label">News</span>
+                <p className="section-content">{idea.news}</p>
               </div>
               
               <div className="card-section">
-                <span className="section-label">Opportunity</span>
-                <p className="section-content opportunity-text">{idea.opportunity}</p>
+                <span className="section-label">Pay Attention To</span>
+                <p className="section-content opportunity-text">{idea.attention_point}</p>
               </div>
               
-              {idea.why_now && (
-                <div className="card-section">
-                  <span className="section-label">Why Now</span>
-                  <p className="section-content">{idea.why_now}</p>
-                </div>
-              )}
+              <div className="card-section">
+                <span className="section-label">Angle 1</span>
+                <p className="section-content">{idea.angle_1}</p>
+              </div>
+
+              <div className="card-section">
+                <span className="section-label">Angle 2</span>
+                <p className="section-content">{idea.angle_2}</p>
+              </div>
               
               <div className="tags">
                 {idea.tags.map(tag => (
